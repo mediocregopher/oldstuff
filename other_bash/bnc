@@ -1,0 +1,33 @@
+#!/bin/bash
+
+TMP_DIR="/tmp/.ncpp"
+
+mkdir -p $TMP_DIR
+exec 3<>/dev/tcp/$1/$2
+
+control_c()
+{
+    kill $CAT_PID
+    exit $?
+}
+
+trap control_c SIGINT
+cat <&3 &
+CAT_PID=$!
+
+if [ "$3" == "-r" -o "$3" == "-rw" ]; then
+    while read line; do
+        echo $line
+        echo $line >&3
+        sleep 1
+    done < $TMP_DIR/$4
+fi
+
+if [ "$3" == "-w" ]; then
+    cat | tee "$TMP_DIR/$4" >&3
+elif [ "$3" == "-rw" ]; then
+    cat | tee -a "$TMP_DIR/$4" >&3
+else
+    cat >&3
+fi
+

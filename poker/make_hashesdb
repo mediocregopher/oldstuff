@@ -1,0 +1,12 @@
+#!/usr/bin/perl
+# MediocreGopher #
+
+open(my $db,'>hashes.db');
+my @files;
+foreach (`ls .` =~ /[a-f0-9]{32}/g) {
+	print $_.":";
+	my $val = <STDIN>;chomp($val);
+	print $db "$_:".$val."\n";
+}
+
+close $db;

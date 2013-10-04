@@ -1,0 +1,8 @@
+#!/bin/sh
+
+mkdir -p /tmp/gitcp
+cd /tmp/gitcp
+
+NAME=$(echo "$1" | md5sum | awk '{print $1}')
+git clone $1 $NAME
+rsync -e"ssh -p22" -a --exclude=.git/ $NAME/ $2

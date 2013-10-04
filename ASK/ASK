@@ -1,0 +1,698 @@
+#!/usr/bin/perl
+# DUSTFINGER #
+
+$inModsRegex = " in .+?| during .+?| throughout .+?| through .+?|";
+
+while (1) 
+{
+	$query = <STDIN>;	
+	chop $query;
+	exit if $query eq 'exit';
+	print "\n";
+	&IsQuestion($query); #Parser sub
+	print "\n#############\nNext question (or type 'exit')\n\n";
+}
+
+
+
+########################################################################
+########################################################################
+#                                WHAT ~ 1
+########################################################################
+########################################################################
+
+sub initWhat {
+
+	# ~1.1
+	# This if statement identifies a sentence of the form:
+	# "What is/are/was/were (a/an) <noun>?", and identifies the subject
+	# at the same time.
+	if ($_[0] =~ /^what (is|are|was|were)( a | an |\s)(.*?)($inModsRegex)\?$/i){
+		#print "\"What is/are/was/were (a/an) <noun>?\"\nThe subject of this sentence is \'$3\'\n";
+		$subject = $3;
+		if ($1 eq 'are') {
+			$plural = '1';
+			$time = 'now';
+		}
+		elsif ($1 eq 'is') {
+			$plural = '0';
+			$time = 'now';
+		}
+		elsif ($1 eq 'was') {
+			$plural = '0';
+			$time = 'past';
+		}
+		elsif ($1 eq 'were') {
+			$plural = '1';
+			$time = 'past';
+		}
+		#print "plurality: $plural\ntime: $time\n";
+		&inModifiers($4);
+		&figure('what');
+		#Parse subject for the case of "What is/are/was/were
+		# the <adjective> of (a/an) <noun>?"
+	}
+
+
+	# ~1.2
+	# This if statement identifies a sentence of the form:
+	# "What <adjective> is/are (a/an) <noun>?", and identifies
+	# the subject and the 'trait in question'.
+	elsif ($_[0] =~ /^what (.*?) (is|are|was|were)( a | an |\s)(.+?)($inModsRegex)\?$/i) {
+		#print "\"What <adjective> is/are (a/an) <noun>?\"\nThe subject of this sentence is \'$4\'\nThe adjective is \'$1\'\n";
+		$tiq = $1;
+		$subject = $4;
+		if ($2 eq 'are') {
+			$plural = '1';
+			$time = 'now';
+		}
+		elsif ($2 eq 'is') {
+			$plural = '0';
+			$time = 'now';
+		}
+		elsif ($2 eq 'was') {
+			$plural = '0';
+			$time = 'past';
+		}
+		elsif ($2 eq 'were') {
+			$plural = '1';
+			$time = 'past';
+		}
+		#print "plurality: $plural\ntime: $time\n";
+		&inModifiers($5);
+		&figure('what');
+		#Submit query for information regarding $tiq for $subject.
+	}
+
+	# ~1.3
+	# This if statement identifies a sentence of the form:
+	# "What do/does/did (a/an) <noun> <verb>?", and identifies
+	# what the subject and the verb are.
+	elsif ($_[0] =~ /^what (do|does|did)( a | an |\s)(.+?)($inModsRegex) ([a-z0-9]*)($inModsRegex)\?$/i) {
+		print "\"What do/does/did (a/an) <noun> <verb>?\"\nThe subject of this sentence is \'$3\'\nThe verb is \'$5\'\n";
+		$verb = $5;
+		$subject = $3;
+		if ($2 eq ' ') {
+			$plural = '1';
+		}
+		elsif ($2 eq ' a '||$2 eq ' an ') {
+			$plural = '0';
+		}
+
+		if ($1 eq 'do'||$1 eq 'does') {
+			$time = 'now';
+		}
+		elsif ($1 eq 'did') {
+			$time = 'past';
+		}
+		print "plurality: $plural\ntime: $time\n";
+		inModifiers($4,$6);
+		#Submit query for information regarding $verb for $subject.
+	}
+
+	# ~1.4
+	# This if statement identifies a sentence of the form:
+	# "What <noun> do/does (a/an) <noun> <verb>?", and
+	# identifies the subject, verb, and noun that specifies
+	# the verb.
+	elsif ($_[0] =~ /^what (.*?) (do|does|did)( a | an |\s)(.*?)($inModsRegex) ([a-z0-9]*)($inModsRegex)\?$/i) {
+		print "\"What <noun> do/does (a/an) <noun> <verb>?\"\nThe subject of this sentence is \'$4\'\nThe verb is \'$6\'\nThe noun that specifies the verb is \'$1\'\n";
+		$verb = $6;
+		$subject = $4;
+		$sNoun = $1;
+		if ($3 eq ' ') {
+			$plural = '1';
+		}
+		elsif ($3 eq ' a '||$3 eq ' an ') {
+			$plural = '0';
+		}
+		if ($2 eq 'do'||$2 eq'does') {
+			$time = 'now';
+		}
+		elsif ($2 eq 'did') {
+			$time = 'past';
+		}
+		print "plurality: $plural\ntime: $time\n";
+		&inModifiers($5,$7);
+		#Submit query for information regarding $verb for $subject,
+		#specified for $sNoun
+	}
+	
+	# ~1.5
+	# This if statement identifies a sentence of the form:
+	# "What <verb> <noun>?", and
+	# identifies the subject and verb.
+	elsif ($_[0] =~ /^what($inModsRegex) ([a-z0-9]*) (.*?)($inModsRegex)\?$/i) {
+		print "\"What <verb> <noun>?\"\nThe subject of this sentence is \'$3\'\nThe verb is \'$2\'\n";
+		$verb = $2;
+		$subject = $3;
+		&inModifiers($1,$4);
+		#Create parser to identify tense and plurality
+		#in $verb and $subject. Use database to do so.
+	}
+
+
+	# Throw-away line.
+	else {
+		print "I don't understand the question.\n";
+	}
+}
+
+########################################################################
+########################################################################
+#                                WHERE ~ 2
+########################################################################
+########################################################################
+
+sub initWhere {
+
+	# ~2.1
+	# This if statement identifies a sentence of the form:
+	# "Where is/are/was/were (the) <noun>?", and identifies the subject.
+	# Used for proper nouns only, I think.
+	if ($_[0] =~ /^where($inModsRegex) (is|are|was|were)( the |\s)(.+?)($inModsRegex)\?$/i) {
+		#print "\"where is/are/was/were (the) <noun>?\"\nThe subject of this sentence is \'$4\'\n";
+		$subject = $4;
+		if ($2 eq 'are') {
+			$plural = '1';
+			$time = 'now';
+		}
+		elsif ($2 eq 'is') {
+			$plural = '0';
+			$time = 'now';
+		}
+		elsif ($2 eq 'was') {
+			$plural = '0';
+			$time = 'past';
+		}
+		elsif ($2 eq 'were') {
+			$plural = '1';
+			$time = 'past';
+		}
+		#print "plurality: $plural\ntime: $time\n";
+		&inModifiers($1,$5);
+		&figure('where');
+		#Submit query for locational information on $subject.
+		#Parse subject for the case of "Where is/are/was/were
+		#the <adjective> of <noun>?"
+	}
+
+	# ~2.2
+	# This if statement identifies a sentence of the form:
+	# "Where do/does (a/an) <noun> <verb>?", and identifies
+	# what the subject and the verb are.
+	elsif ($_[0] =~ /^where (do|does|did)( a | an |\s)(.*?)($inModsRegex) ([a-z0-9]*)($inModsRegex)\?$/i) {
+		print "\"Where do/does (a/an) <noun> <verb>?\"\nThe subject of this sentence is \'$3\'\nThe verb is \'$5\'\n";
+		$verb = $5;
+		$subject = $3;
+		if ($2 eq ' ') {
+			$plural = '1';
+		}
+		elsif ($2 eq ' a '||$2 eq ' an ') {
+			$plural = '0';
+		}
+		if ($1 eq 'do'||$1 eq 'does') {
+			$time = 'now';
+		}
+		elsif ($1 eq 'did') {
+			$time = 'past';
+		}
+		print "plurality: $plural\ntime: $time\n";
+		&inModifiers($4,$6);
+		#Submit query for information regarding where <noun>s <verb>
+	}
+
+	# Throw-away line.
+	else {
+		print "I don't understand the question.\n";
+	}
+
+
+}
+
+########################################################################
+########################################################################
+#                                WHO ~ 3
+########################################################################
+########################################################################
+
+sub initWho {
+
+	# ~3.1
+	# This if statement identifies a sentence of the form:
+	# "Who is/are/was/were (the) <noun>?", and identifies
+	# what the subject.
+	if ($_[0] =~ /^who (is|are|was|were)( the |\s)(.*?)($inModsRegex)\?$/i) {
+		print "\"who is/are/was/were (the) <noun>?\"\nThe subject of this sentence is \'$3\'\n";
+		$subject = $3;
+		if ($1 eq 'are') {
+			$plural = '1';
+			$time = 'now';
+		}
+		elsif ($1 eq 'is') {
+			$plural = '0';
+			$time = 'now';
+		}
+		elsif ($1 eq 'was') {
+			$plural = '0';
+			$time = 'past';
+		}
+		elsif ($1 eq 'were') {
+			$plural = '1';
+			$time = 'past';
+		}
+		print "plurality: $plural\ntime: $time\n";
+		&inModifiers($4);
+		#Submit query for personal information on $subject.
+		#Parse subject for the case of "Who is/are/was/were
+		# the <adjective> of <noun>?"
+	}
+
+	# ~3.2
+	# This if statement identifies a sentence of the form:
+	# "Who do/does/did (a/an) <noun> <verb>?", and identifies
+	# what the subject and the verb are.
+	elsif ($_[0] =~ /^who (do|does|did)( a | an |\s)(.*?)($inModsRegex) ([a-z0-9]*)($inModsRegex)\?$/i) {
+		print "\"Who do/does/did (a/an) <noun> <verb>?\"\nThe subject of this sentence is \'$3\'\nThe verb is \'$5\'\n";
+		$verb = $5;
+		$subject = $3;
+		if ($2 eq ' ') {
+			$plural = '1';
+		}
+		elsif ($2 eq ' a '||$2 eq ' an ') {
+
+			$plural = '0';
+		}
+		if ($1 eq 'do'||$1 eq 'does') {
+			$time = 'now';
+		}
+		elsif ($1 eq 'did') {
+			$time = 'past';
+		}
+		print "plurality: $plural\ntime: $time\n";
+		&inModifiers($4,$6);
+		#Submit query for personal information regarding $verb for $subject.
+	}
+
+	# Throw-away line.
+	else {
+		print "I don't understand the question.\n";
+	}
+
+}
+
+
+
+
+####################################################################################
+####################################################################################
+#                                       Parser Subs
+####################################################################################
+####################################################################################
+
+##### IsQuestion #####
+#Looks to see if the query ends in a question mark,
+# and displays an error if it doesn't, followed by sending the
+# user back to the beginning to input a new query.
+sub IsQuestion {
+	if ($_[0] =~ /\?$/) {
+		&WhichW($_[0]); #Parser sub
+	}
+	else {print "Query needs to be a question.\n";}
+}
+
+
+##### WhichW #####
+#Identifies which of the five W's (who, what when where,
+#why) the sentence contains. It then directs the query down the
+#appropriate branch.
+sub WhichW {
+	if ($_[0] =~ /^(who|what|when|where|why)/i ) {
+		if ($1 =~ /^who$/i) {
+			&initWho;
+		}
+		elsif ($1 =~ /^what$/i) {
+			&initWhat;
+		}
+		#elsif ($1 =~ /^when$/i) {
+		#	&initWhen;
+		#}
+		elsif ($1 =~ /^where$/i) {
+			&initWhere;
+		}
+		#elsif ($1 =~ /^why$/i) {
+		#	&initWhy;
+		#}
+	}
+	else {print "I don't understand the question.\n"}
+}
+
+##### inModifiers (third revision) #####
+#Looks for "in modifiers", e.g.: What color are foxes *in winter*?
+#Saves all of them to the array @inMods. Submit all potential in's
+#found as parameters to &inModifier. There must be a space on either
+#side of the 'in' in the regex that you submit, i.e. / in /
+
+#Note, I just added in 'during' as another inMod, since both 'in'
+#and 'during' are interchangeable in most instances, I believe. More
+#will certainly come, I'm about to add in 'throughout' in fact. I'll
+#put a scalar at the beginning of the program containing all the in
+#modifiers listed in the appropriate regex form, and then substitute
+#that in to all the current cases.
+
+#New rule, inMods cannot start with the word 'the'. Ever.
+
+sub inModifiers {
+	@inMods = ();
+	for($i=0;$i<@_;$i++) { #For each parameter submitted
+	push(@inMods,split(/ in | during | throughout | through /,$_[$i])) if $_[$i] !~ /^(\s|)$/; #splits individual parameters where-ever / in /, given that there is something there, and adds each to @inMods
+	}
+
+	for($i=0;$i<@inMods;$i++) { #Tests for and gets rid of blank entries in @inMods
+		if ($inMods[$i] =~ /^(\s|)$/) {
+			splice(@inMods,$i,1);
+		}
+	}
+
+	for ($a=0;$a<@inMods;$a++) { #parses out the word 'the' at the beginning of inMods
+		$inMods[$a] =~ s/^the (.+?)/$1/i;
+	}
+
+	foreach (@inMods) { #Prints @inMods, take this out later
+		print "inMod: $_\n";
+	}
+}
+
+
+####################################################################################
+####################################################################################
+#                                       Figure
+####################################################################################
+####################################################################################
+#The tough part, needs to get information based on the limited information presented
+#in the query. I'm starting with ~1.1 and working down. ~1.1 only provides $subject,
+#so I think I'll set this first part up so that if only $subject is given and the
+#thread (so to speak) is coming from what or who, it will provide $db{'general'}
+
+sub figure { 
+	$subject =~ s/^the (.+?)$/$1/i if $subject !~ /^the$/; #Gets rid of any 'the's
+							       #in the beginning, as long
+							       #as $subject neq 'the'
+
+	$from = $_[0]; #First parameter identifies what's calling &figure
+
+
+##########################################################################
+	#Fixes $subject for plurality
+	if ($plural) {
+		open(PLURAL,"db/plural");
+		@pluralDB = <PLURAL>;
+		close PLURAL;
+		foreach(@pluralDB) {
+			$subject = $1 if /^(.+?):$subject(\n|)$/;
+		}
+	}	
+##########################################################################
+##########################################################################
+	#Opens the appropriate db page, and loads it into @dbtemp. From
+	#there it makes @db based on the format (.+):(.+)::(.+)
+	$subject =~ /([a-z0-9]).*/i; $firstLetter = $1;
+	open(DBPAGE,"db/$firstLetter/$subject") or die "Couldn't find information on \'$subject\' in the database\n";
+	@dbtemp = <DBPAGE>;
+	close(DBPAGE);
+	foreach(@dbtemp) {
+		if (/^(.+?):(.+?)::(.+)$/) {
+			$db{$1}->{$2}=$3;
+		}
+	}
+##########################################################################
+
+	if ($sNoun =~ /./) {
+		#Only one situation uses $sNoun, so I'm just getting this out of the
+		#way
+	}
+
+
+
+	#General cases
+	elsif ($subject and !$tiq and !$verb) {
+	
+		#Processes inMods
+		$figureInMods = &figureInMods('general') if @inMods;
+		print "figureInMods: $figureInMods\n" if @inMods; 
+
+		#Looks at the general case: Who/What is <noun>?
+		if ($from =~ /^(who|what)$/) {
+			
+			#If there are no inMods, or the user opted for only
+			#general information, print general $time
+			if (!$figureInMods or $figureInMods == 'general') {
+				print $db{'general'}->{$time}."\n";
+			}	
+
+			#If there are inMods, print specified information
+			else {
+				$_ = "$time\:$figureInMods";
+				print "$db{'general'}->{$_}\n";
+			}
+		}
+
+	
+		#Looks at the general case: Where is <noun>?
+		elsif ($from eq 'where'){
+			
+			#If there are no inMods, or the user opted for only
+			#general information, print general $time
+			if (!$figureInMods or $figureInMods == 'general') {
+				print $db{'location'}->{$time}."\n";
+			}	
+
+			#If there are inMods, print specified information
+			else {
+				$_ = "$time\:$figureInMods";
+				print "$_\n$db{'location'}->{$_}\n";
+			}
+		}
+	}
+
+	#Case ~1.2
+	elsif ($subject and $tiq and !$verb and $from eq 'what') {
+	
+		#Processes inMods
+		$figureInMods = &figureInMods($tiq) if @inMods; 
+
+		#If there are no inMods print only specifying for
+		#time
+		if (!$figureInMods) {
+			print $db{$tiq}->{$time}."\n";
+		}
+
+		#Print general information if the user opted for it.
+		elsif ($figureInMods eq 'general') {
+			print $db{'general'}->{$time}."\n";
+		}
+
+		#If there are inMods, print specified information
+		else {
+			$_ = "$time\:$figureInMods";
+			print "$db{$tiq}->{$_}\n";
+		}
+	}
+}
+
+####################################################################################
+####################################################################################
+#                                       Figure - Subs
+####################################################################################
+####################################################################################
+#Figure needed some subs, this is where they are.
+
+#First paramater is the general paramater that you're testing inMods against (for 
+#instance 'general', 'location', or and adjective/verb). Then the sub will return
+#an answer, or nothing if nothing is found. In the future,
+#this sub will get more complicated, additions should include non-exact dates and
+#recognition of the difference between things like 'beginning of winter' and 'end
+#of winter'.
+sub figureInMods {
+	use Array::Compare;
+
+	@inModsKeys = keys(%{$db{$_[0]}});
+	foreach(@inModsKeys) {
+		@_ = ($_ =~ /(.+?):|(.+?)$/g); #Does the splitting
+
+		for($a=0;$a<@_;$a++) {		#Gets rid of 'now', 'past', etc from
+			splice(@_,$a,1) if $_ eq $time;  #the list
+		}
+
+		for($h=0;$h<@_;$h++) {             #
+			while ($_[$h] !~ /^.+$/) { #Gets rid of blank entries
+				splice(@_,$h,1);   #
+			}                          #
+		}                                  #
+
+		push (@inModsSplit,[@_]);	#Pushes the 'clean' split array onto @inModsSplit
+	}
+
+	$compare = Array::Compare->new;
+	
+	for($a = 0;$a<@inModsSplit;$a++) {
+		@permAlpha = ();
+
+		#Establishes @permAlpha as the array with more elements
+		if (@{$inModsSplit[$a]} >= @inMods) {@permAlphaUnClean = @{$inModsSplit[$a]};@permBeta = @inMods;}
+		else {@permBeta = @{$inModsSplit[$a]};@permAlphaUnClean = @inMods;}
+		
+		#$originalTakeOut is the number of elements that need to be removed from @permAlpha so that the two perms are
+		#equal in terms of number of elements.
+		$originalTakeOut = @permAlphaUnClean - @permBeta;
+	
+
+		#Creates permAlpha if it needs to go through the sub, and deals with it if it doesn't
+		if ($originalTakeOut > 0) {&createPermAlpha(0,\@permAlphaUnClean,0);}
+		else {push(@permAlpha,[@permAlphaUnClean]);}
+
+		#Checks for equality before any elements are taken away.
+		for($i=0;$i<@permAlpha;$i++) {
+			if($compare->perm(\@{$permAlpha[$i]}, \@permBeta)) {
+				$scores[$a] = 1;
+				goto done;
+			}
+		}
+		
+		#Compares all possible combinations of the two arrays for equality.
+		for($scoreCounter = 2;$scoreCounter - 1 < @permBeta;$scoreCounter++) {
+			for ($i=0;$i<@permAlpha;$i++) {
+				@compareAlpha = ();
+				@compareBeta = ();
+				&createComparer(0,\@{$permAlpha[$i]},0,\@{$permAlpha[$i]},\@compareAlpha); #Two of the parameters are 
+				&createComparer(0,\@permBeta,0,\@permBeta,\@compareBeta); #the same because of the way the subroutine 
+				for($h=0;$h<@compareAlpha;$h++) {			  #works.
+					for($j=0;$j<@compareBeta;$j++) {
+						if ($compare->perm(\@{$compareAlpha[$h]}, \@{$compareBeta[$j]})) {
+							$scores[$a] = $scoreCounter;
+							goto done;
+						}
+					}
+				}
+			}
+		}
+
+		done:
+	}
+
+
+	#This loop identifies the index number that scored lowest (best). If more than one scored the best, it
+	#creates an array of the index numbers (@equalScores)
+	$lowestIndex = 0;
+	for($a=0;$a<@scores;$a++) {
+		if ($scores[$a] < $scores[$lowestIndex]) {
+			$lowestIndex = $a;
+			@equalScores = ();
+		}
+		
+		elsif ($scores[$a] == $scores[$lowestIndex] && $a != $lowestIndex) {
+			push(@equalScores,$a);
+		}
+	}
+
+
+	#This part deals with the @equalScores array. Essentially it asks the user which one of the
+	#'competing' scorers they want, and also gives them the option to just get general information
+	#or quit entirely.
+	if (@equalScores) {
+		splice (@equalScores, 0, 0, $lowestIndex);
+		print "I don't quite have the information you need. Would you rather specify\:\n";
+		for ($a=1;$a<@equalScores+1;$a++) {
+			print "($a) ";
+			for($b=0;$b<@{$inModsSplit[$equalScores[$a-1]]}-1;$b++) {
+				print "$inModsSplit[$equalScores[$a-1]]->[$b], ";
+			}
+			print "and $inModsSplit[$equalScores[$a-1]]->[-1].\n";
+		}
+		print "($a) Just give me general information.\n";
+		$a++;
+		print "($a) Nevermind, just give up.\n(Choose a number)\n";
+
+		$chosen = <STDIN>;
+
+		if ($chosen == $a) {
+			exit;
+		}
+
+		elsif ($chosen  == $a-1) {
+			$final = 'general';
+		}
+
+		else {
+			$final = @inModsKeys[$chosen-1];
+		}
+		print "\n";
+	}
+
+
+	#If there is no @equalScores, then the 'winner' is assigned to $final
+	else {
+		$final = $inModsKeys[$lowestIndex];
+	}
+	
+
+	#Finally, the function returns $final
+	return $final;
+
+
+	#This sub is used to dynamically create @permAlpha. It calls itself as necessary based on $originalTakeOut
+	#until it's time to stop.
+	#First parameter is the proverbial $i
+	#Second parameter is what becomes @temp1
+	#Third parameter is the call number for the previous loop
+	sub createPermAlpha {
+		my @temp1 = @{$_[1]};
+		my $call = $_[2]+1;
+		my @temp2;
+		for (my $i = $_[0];$i<@permAlphaUnClean-$call+1;$i++) {
+			@temp2 = @temp1;
+			splice(@temp2,$i,1);
+			if ($call == $originalTakeOut) {push(@permAlpha,[@temp2]);}
+			else {&createPermAlpha($i,\@temp2,$call);}
+		}
+	}
+		#This is the model used to make &createPermAlpha:
+		#
+		#for ($i=0;$i<$permAlphaOriginalLength;$i++) {
+		#	@temp1 = @permAlphaUnClean;
+		#	splice(@temp1,$i,1);
+		#
+		#	for ($h=$i;$h<$permAlphaOriginalLength-1;$h++) {
+		#		@temp2 = @temp1;
+		#		splice(@temp2,$h,1);
+		#				
+		#		for ($j=$h;$j<$permAlphaOriginalLength-2;$j++) {
+		#			@temp3 = @temp2;
+		#			splice(@temp3,$j,1);
+		#			push(@permAlpha,[@temp3]);
+		#		}
+		#	}
+		#
+		#}
+
+	#This sub is used to dynamically create the arrays needed to compare @permAlpha and @permBeta.
+	#It calls itself as necessary based on $takeOut until it's time to stop.
+	#First parameter is the proverbial $i
+	#Second parameter is what becomes @temp1
+	#Third parameter is the call number for the previous loop
+	#Fourth parameter refers to either @permAlpha or @permBeta, depending on which you're working with.
+	#Fifth parameter refers to whatever array everything is going into.
+	sub createComparer {
+		my @temp1 = @{$_[1]};
+		my $call = $_[2]+1;
+		my @temp2;
+		for (my $i = $_[0];$i<@{$_[3]}-$call+1;$i++) {
+			@temp2 = @temp1;
+			splice(@temp2,$i,1);
+			if ($call == $scoreCounter - 1) {push(@{$_[4]},[@temp2]);}
+			else {&createComparer($i,\@temp2,$call,$_[3],$_[4]);}
+		}	
+	}
+}
+
+

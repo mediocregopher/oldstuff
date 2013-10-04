@@ -1,0 +1,124 @@
+#!/usr/bin/perl
+# MediocreGopher #
+
+use X11::GUITest qw(:ALL);
+
+#my $word = $ARGV[0];
+while (1) {
+(my $window) = FindWindowLike('Chicktionary - Club Bing - Mozilla Firefox');
+SetKeySendDelay(300);
+MoveWindow( $window, 0, 0 );
+ClickWindow($window);
+#MoveMouseAbs(250,275); #Give up
+#MoveMouseAbs(550,315); #Unlock
+#MoveMouseAbs(500,300); #Play again
+#MoveMouseAbs(250,300); #Single player1
+#MoveMouseAbs(490,340); #Single player2
+#MoveMouseAbs(500,375); #Text box
+
+MoveMouseAbs(250,300); #Single player1
+click();
+sleep 5;
+MoveMouseAbs(490,340); #Single player2
+click();
+sleep 5;
+MoveMouseAbs(500,375); #Text box
+click();
+sleep 0.5;
+
+`scrot /tmp/screen.png`;
+`gimp -i -b '(unscramble)' -b '(gimp-quit 0)'`;
+my $word = lc(`gocr /tmp/screen1.png`);
+chomp($word);
+$word =~ s/0/d/g;
+print $word."\n";
+
+my @letters = $word =~ /[a-z]/gi;
+die "Word must be less than 8 characters" if @letters > 7;
+
+my @list;
+my @unsorted_return_list;
+my @return_list;
+my @word = $word =~ /[a-z]/g;
+
+perm_words(\@word,\@list);
+push(@list,recon(\@word));
+my %temp = map { $_ => 1 } @list;
+@list = keys %temp;
+
+push(@unsorted_return_list,real_words($_)) foreach @list;
+
+my $i = 0;
+while(1) {
+	last if $i == @unsorted_return_list;
+	if ($unsorted_return_list[$i] =~ /[A-Z]/) {
+		splice(@unsorted_return_list,$i,1);
+	}
+	else {$i++}
+}
+
+my %temp = map { $_ => 1 } @unsorted_return_list;
+@unsorted_return_list = keys %temp;
+
+my @return_list = sort {length($b) cmp length($a)} @unsorted_return_list;
+splice(@return_list, 50);
+print $_."\n" foreach @return_list;
+
+
+
+try($_) foreach @return_list;
+
+MoveMouseAbs(250,275); #Give up
+click();
+sleep 0.5;
+MoveMouseAbs(550,315); #Unlock
+click();
+sleep 0.5;
+MoveMouseAbs(250,275); #Give up
+foreach (0..39) {
+	click();sleep 0.25;
+}
+sleep 0.5;
+MoveMouseAbs(500,300); #Play again
+click();
+
+sleep 5*60;
+}
+
+
+sub try() {
+	my $word = $_[0];
+	my @word = $word =~ /[a-z]/g;
+	SendKeys($word."{ENT}");
+	SendKeys("{BAC}") foreach @word;
+}
+
+sub perm_words {
+	my @word = @{$_[0]};
+	return if @word < 4;
+	my @temp = @word;
+	foreach (0..@word - 1) {
+		splice(@temp,$_,1);
+		push(@{$_[1]}, recon(\@temp));
+		perm_words(\@temp,$_[1]);
+		@temp = @word;
+	}
+}
+
+sub real_words {
+	my $response = `curl -d "candidate=$_[0]&dictionary=english-us" http://homework.jhax.net/extra/Unscrambler.jsp 2>&1`;
+	$response =~ s/\n|\t//g;
+	$response = $1 if $response =~ /<input type="submit" value="Lookup"><br><UL>(.+?)<\/UL>/;
+	return ($response =~ /<LI>(.+?)<\/LI>/g);
+}
+
+sub recon {
+	my $return = '';
+	$return .= $_ foreach @{$_[0]};
+	return $return;
+}
+
+sub click {
+	PressMouseButton M_LEFT;
+	ReleaseMouseButton M_LEFT;
+}

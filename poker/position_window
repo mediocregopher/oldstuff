@@ -1,0 +1,9 @@
+#!/usr/bin/perl
+# MediocreGopher #
+
+use X11::GUITest qw(:ALL);
+use Image::Magick;
+
+(my $window) = FindWindowLike(' Hold\'em');
+MoveWindow($window,0,0);
+

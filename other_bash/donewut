@@ -1,0 +1,17 @@
+#!/bin/sh
+#
+#Usage: donewut [day]
+#
+#Display what you've done in a given day. Specifying which day is done by piping directly into
+#date's -d option, so you can do things like "yesterday" and "3 days ago". Default is "today"
+
+FILE=~/Dropbox/Home/Info/wutdo
+
+if [ "$1" != "" ]; then
+    SEARCH=$(date -d"$1" +"%a %d %b %Y")
+else
+    SEARCH=$(date +"%a %d %b %Y")
+fi
+
+echo -e "Search: $SEARCH\n" >&2
+cat $FILE | grep --color=never "$SEARCH"

@@ -1,0 +1,209 @@
+#!/usr/bin/perl
+# MediocreGopher #
+
+my @chars_upper = ('A'..'Z');
+my @chars_lower = ('a'..'z');
+my @chars_full = ('a'..'z','A'..'Z','0'..'9','~','`','!','@','#','$','%','^','&','*','(',')','_','-','+','+','[','{',']','}','|','\\',';',':','\'',',','<','.','>','/','?');
+my @subs = (\&_sub,\&_print,\&_variable,\&_builtins,\&sub_exec);
+
+_dostuff_('blarg');
+#print _meat;
+exit;
+
+sub cond {
+	my @conds = (">",">=","<","<=","eq","ne");
+	my $return = rand_scalar()." ".$conds[int(rand(@conds))]." ".rand_scalar();
+}
+
+sub rand_stopper {
+	return !int(rand($_[0]+1));
+}
+
+sub rand_string {
+	my $rand_string;
+	$rand_string .= $_[1][int(rand(@{$_[1]}))] foreach (0..$_[0]-1);
+	return $rand_string;		
+}
+
+sub rand_string_length {
+	my $rand_string;
+	$rand_string .= $_[1][int(rand(@{$_[1]}))];
+	while (!rand_stopper($_[0]-1)) {
+		$rand_string .= $_[1][int(rand(@{$_[1]}))];
+	}
+	return $rand_string;
+}
+
+sub rand_scalar {
+	my $return = '';
+	if (rand_stopper(1)) {
+		$return .= "\$".rand_string(3,\@chars_lower);
+		if (rand_stopper(9)) {
+			$return .= '['.int(rand(99)).']';
+		}
+		elsif (rand_stopper(19)) {
+			$return .= '{'.rand_scalar().'}';
+		}
+	}
+	elsif (rand_stopper(7)) {
+		$return .= int(rand(640387997));
+	}
+	elsif (rand_stopper(9)) {
+		$return .= "\@".rand_string(3,\@chars_lower);
+	}
+	elsif (rand_stopper(19)) {
+		$return .= "keys(\%".rand_string(3,\@chars_lower).")";
+	}
+	elsif (rand_stopper(19)) {
+		$return .= "<".rand_string(4,\@chars_upper).">";
+	}
+	else {
+		$return .= '"'.rand_string_length(100,\@chars_full).'"';
+	}
+	if (rand_stopper(10)) {
+		if (rand_stopper(5)) {
+			$return .= '+'.rand_scalar();
+		}
+		elsif (rand_stopper(5)) {
+			$return .= '-'.rand_scalar();
+		}
+		elsif (rand_stopper(5)) {
+			$return .= '*'.rand_scalar();
+		}
+		elsif (rand_stopper(5)) {
+			$return .= '/'.rand_scalar();
+		}
+		elsif (rand_stopper(5)) {
+			$return .= '%'.rand_scalar();
+		}
+	}
+	$return .= '.'.rand_scalar() if rand_stopper(9);
+	$return .= '.'."join(' ',@".rand_string(3,\@chars_lower).")" if rand_stopper(15);
+	if (rand_stopper(15)) {
+		my $rand = rand_scalar();
+		$return .= '.'."substr(".$rand.",".int(rand($rand.length)).")";
+	}
+	return $return;
+}
+
+sub _meat {
+	my @subs = (\&_print,\&_variable);
+	push(@subs,\&_if) if $_[0]{'if'} <= 2;
+	push(@subs,\&_loop) if $_[0]{'loop'} <= 2;
+	push(@subs,\&_sub) if $_[0]{'sub'} <= 2;
+	return $subs[int(rand(@subs))]($_[0]).$subs[int(rand(@subs))]($_[0]);	
+}
+
+sub _builtins {
+	my $return;
+	my @subs = (\&_open,\&_close,\&_chop,\&_chomp);
+	sub _open {
+		my @whatever = (">",">>","<");
+		$return = "open(".rand_string(4,\@chars_upper).",'".$whatever[int(rand(@whatever))].rand_string(4,\@chars_lower)."');\n";
+	}
+	sub _close {
+		$return = "close(".rand_string(4,\@chars_upper).");\n";
+	}
+	sub _chop {
+		$return = "chop(".rand_scalar().");\n";
+	}
+	sub _chomp {
+		$return = "chomp(".rand_scalar().");\n";
+	}
+	&{$subs[int(rand(@subs))]}();
+}
+
+sub _if {
+	$_[0]{'if'} += 1;
+	my $return = "if (".cond().") {\n".&_meat($_[0])."}\n";
+	$return .= "elsif (".cond().") {\n".&_meat($_[0])."}\n" until (rand_stopper(1));
+	$return .= "else (".cond().") {\n".&_meat($_[0])."}\n" if rand_stopper(10);
+	return $return;
+}
+
+sub _loop {
+	$_[0]{'loop'} += 1;
+	my $return;
+	$return .= "while (".cond().") {\n";
+	$return .= &_meat($_[0]);
+	$return .= "}\n";
+	return $return;
+}
+
+sub _sub {
+	$_[0]{'sub'} += 1;
+	my $return = "sub ";
+	$return .= rand_string(3,\@chars_lower)." {\n";
+	$return .= &_meat($_[0]);
+	$return .= "return ".rand_scalar().";\n" if rand_stopper(2);
+	$return .= "}\n";
+	return $return;
+}
+
+sub _sub_exec {
+	my $return = rand_string(3,\@chars_lower)."(";
+	$return .= rand_scalar()."," until rand_stopper(2);
+	chop($return) if substr($return,-1) eq ",";
+	$return .= ");\n";
+	return $return;
+}
+
+sub _print {
+	my $return = "print ";	
+	$return .= &rand_string(1,\@chars_upper)." " if (rand_stopper(1));
+	$return .= '"';
+	$return .= rand_string_length(200,\@chars_full);
+	$return .= "\";\n";
+	return $return;	
+}
+
+sub _variable {
+	my $return;
+	if (rand_stopper(4)) {
+		$return .= "my ";
+	}
+	if (rand_stopper(14)) {
+		$return .= "\@".rand_string(3,\@chars_lower)." = (";
+		while(!rand_stopper(19)) {
+			$return .= rand_scalar().',';
+		}
+		chop $return if substr($return,-1) ne '(';
+		$return .= ")";
+	}
+	elsif (rand_stopper(19)) {
+		$return .= "\%".rand_string(3,\@chars_lower)." = (";
+		while(!rand_stopper(19)) {
+			$return .= rand_scalar().','.rand_scalar().',';
+		}
+		chop $return if substr($return,-1) ne '(';
+		$return .= ")";
+	}
+	else {
+		$return .= "\$".rand_string(3,\@chars_lower)." = ".rand_scalar();
+	}
+
+	$return .= ";\n";
+	return $return;
+
+}
+
+sub _dostuff_ {
+	my $file_name = $_[0];
+	open(READ,$file_name);
+	@content = <READ>;	
+	close READ;
+	
+	if (int(rand(2))) {
+		splice(@content,int(rand(@content)),1);
+		print "removed one\n";
+	}
+	splice(@content,int(rand(@content)),0,_meat());
+
+	open(WRITE,'>'.$file_name);
+	print WRITE $_ foreach @content;
+	close(WRITE);
+}
+
+
+
+

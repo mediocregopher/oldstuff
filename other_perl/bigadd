@@ -1,0 +1,31 @@
+#!/usr/bin/perl
+# MediocreGopher #
+
+local $| = 1;
+
+open($fh,'nums');
+
+my @a = <$fh>;
+chomp foreach @a;
+
+for (my $i=0;$i<@a;$i++) {
+	my @ab = $a[$i] =~ /[0-9]/g;
+	$a[$i] = \@ab;
+}
+
+my $rem;
+my $ans;
+for (my $h=@{$a[0]}-1;$h>=0;$h--) {
+	my $tot;
+	for (my $v=0;$v<@a;$v++) {
+		$tot += $a[$v][$h];
+	}
+	$tot += $rem;
+	$ans = $1.$ans if $tot =~ /([0-9])$/;
+	$rem = 0;
+	$rem = int($tot/10) if $tot > 9;
+}
+$ans = $rem.$ans;
+
+print $ans."\n";
+close $fh;

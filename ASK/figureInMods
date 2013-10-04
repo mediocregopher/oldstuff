@@ -1,0 +1,197 @@
+#!/usr/bin/perl
+# DUSTFINGER #
+$subject = "great wall of china";
+$subject =~ /([a-z0-9]).*/i; $firstLetter = $1;
+open(DBPAGE,"db/$firstLetter/$subject") or die "Couldn't find information on \'$subject\' in the database\n";
+@dbtemp = <DBPAGE>;
+close(DBPAGE);
+foreach(@dbtemp) {
+	$db{$1}->{$2}=$3 if /^(.+?):(.+?)::(.+)$/;
+}
+
+@inMods = ("summer","italy","france");
+
+&figureInMods('color');
+
+sub figureInMods {
+	use Array::Compare;
+
+	@inModsKeys = keys(%{$db{$_[0]}});
+	foreach(@inModsKeys) {
+		@_ = ($_ =~ /(.+?):|(.+?)$/g); #Does the splitting
+
+		for($a=0;$a<@_;$a++) {
+			splice(@_,$a,1) if $_ == $time;
+		}
+
+		for($h=0;$h<@_;$h++) {             #
+			while ($_[$h] !~ /^.+$/) { #Gets rid of blank entries
+				splice(@_,$h,1);   #
+			}                          #
+		}                                  #
+
+		push (@inModsSplit,[@_]);	#Pushes the 'clean' split array onto @inModsSplit
+	}
+
+	$compare = Array::Compare->new;
+	
+	for($a = 0;$a<@inModsSplit;$a++) {
+		@permAlpha = ();
+
+		#Establishes @permAlpha as the array with more elements
+		if (@{$inModsSplit[$a]} >= @inMods) {@permAlphaUnClean = @{$inModsSplit[$a]};@permBeta = @inMods;}
+		else {@permBeta = @{$inModsSplit[$a]};@permAlphaUnClean = @inMods;}
+		
+		#$originalTakeOut is the number of elements that need to be removed from @permAlpha so that the two perms are
+		#equal in terms of number of elements.
+		$originalTakeOut = @permAlphaUnClean - @permBeta;
+	
+
+		#Creates permAlpha if it needs to go through the sub, and deals with it if it doesn't
+		if ($originalTakeOut > 0) {&createPermAlpha(0,\@permAlphaUnClean,0);}
+		else {push(@permAlpha,[@permAlphaUnClean]);}
+
+		#Checks for equality before any elements are taken away.
+		for($i=0;$i<@permAlpha;$i++) {
+			if($compare->perm(\@{$permAlpha[$i]}, \@permBeta)) {
+				$scores[$a] = 1;
+				goto done;
+			}
+		}
+		
+		#Compares all possible combinations of the two arrays for equality.
+		for($scoreCounter = 2;$scoreCounter - 1 < @permBeta;$scoreCounter++) {
+			for ($i=0;$i<@permAlpha;$i++) {
+				@compareAlpha = ();
+				@compareBeta = ();
+				&createComparer(0,\@{$permAlpha[$i]},0,\@{$permAlpha[$i]},\@compareAlpha); #Two of the parameters are 
+				&createComparer(0,\@permBeta,0,\@permBeta,\@compareBeta); #the same because of the way the subroutine 
+				for($h=0;$h<@compareAlpha;$h++) {			  #works.
+					for($j=0;$j<@compareBeta;$j++) {
+						if ($compare->perm(\@{$compareAlpha[$h]}, \@{$compareBeta[$j]})) {
+							$scores[$a] = $scoreCounter;
+							goto done;
+						}
+					}
+				}
+			}
+		}
+
+		done:
+	}
+
+
+	#This loop identifies the index number that scored lowest (best). If more than one scored the best, it
+	#creates an array of the index numbers (@equalScores)
+	$lowestIndex = 0;
+	for($a=0;$a<@scores;$a++) {
+		if ($scores[$a] < $scores[$lowestIndex]) {
+			$lowestIndex = $a;
+			@equalScores = ();
+		}
+		
+		elsif ($scores[$a] == $scores[$lowestIndex] && $a != $lowestIndex) {
+			push(@equalScores,$a);
+		}
+	}
+
+
+	#This part deals with the @equalScores array. Essentially it asks the user which one of the
+	#'competing' scorers they want, and also gives them the option to just get general information
+	#or quit entirely.
+	if (@equalScores) {
+		splice (@equalScores, 0, 0, $lowestIndex);
+		print "I don't quite have the information you need. Would you rather specify\:\n";
+		for ($a=1;$a<@equalScores+1;$a++) {
+			print "($a) ";
+			for($b=0;$b<@{$inModsSplit[$equalScores[$a-1]]}-1;$b++) {
+				print "$inModsSplit[$equalScores[$a-1]]->[$b], ";
+			}
+			print "and $inModsSplit[$equalScores[$a-1]]->[-1].\n";
+		}
+		print "($a) Just give me general information.\n";
+		$a++;
+		print "($a) Nevermind, just give up.\n(Choose a number)\n";
+
+		$chosen = <STDIN>;
+
+		if ($chosen == $a) {
+			exit;
+		}
+
+		elsif ($chosen  == $a-1) {
+			$final = 'general';
+		}
+
+		else {
+			$final = @inModsKeys[$chosen-1];
+		}
+		print "\n";
+	}
+
+
+	#If there is no @equalScores, then the 'winner' is assigned to $final
+	else {
+		$final = $inModsKeys[$lowestIndex];
+	}
+	
+
+	#Finally, the function returns $final
+	return $final;
+
+
+	#This sub is used to dynamically create @permAlpha. It calls itself as necessary based on $originalTakeOut
+	#until it's time to stop.
+	#First parameter is the proverbial $i
+	#Second parameter is @temp1
+	#Third parameter is the call number for the previous loop
+	sub createPermAlpha {
+		my @temp1 = @{$_[1]};
+		my $call = $_[2]+1;
+		my @temp2;
+		for (my $i = $_[0];$i<@permAlphaUnClean-$call+1;$i++) {
+			@temp2 = @temp1;
+			splice(@temp2,$i,1);
+			if ($call == $originalTakeOut) {push(@permAlpha,[@temp2]);}
+			else {&createPermAlpha($i,\@temp2,$call);}
+		}
+	}
+		#This is the model used to make &createPermAlpha:
+		#
+		#for ($i=0;$i<$permAlphaOriginalLength;$i++) {
+		#	@temp1 = @permAlphaUnClean;
+		#	splice(@temp1,$i,1);
+		#
+		#	for ($h=$i;$h<$permAlphaOriginalLength-1;$h++) {
+		#		@temp2 = @temp1;
+		#		splice(@temp2,$h,1);
+		#				
+		#		for ($j=$h;$j<$permAlphaOriginalLength-2;$j++) {
+		#			@temp3 = @temp2;
+		#			splice(@temp3,$j,1);
+		#			push(@permAlpha,[@temp3]);
+		#		}
+		#	}
+		#
+		#}
+
+	#This sub is used to dynamically create the arrays needed to compare @permAlpha and @permBeta.
+	#It calls itself as necessary based on $takeOut until it's time to stop.
+	#First parameter is the proverbial $i
+	#Second parameter is @temp1
+	#Third parameter is the call number for the previous loop
+	#Fourth parameter refers to either @permAlpha or @permBeta, depending on which you're working with.
+	#Fifth parameter refers to whatever array everything is going into.
+	sub createComparer {
+		my @temp1 = @{$_[1]};
+		my $call = $_[2]+1;
+		my @temp2;
+		for (my $i = $_[0];$i<@{$_[3]}-$call+1;$i++) {
+			@temp2 = @temp1;
+			splice(@temp2,$i,1);
+			if ($call == $scoreCounter - 1) {push(@{$_[4]},[@temp2]);}
+			else {&createComparer($i,\@temp2,$call,$_[3],$_[4]);}
+		}	
+	}
+}
+

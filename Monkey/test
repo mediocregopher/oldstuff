@@ -1,0 +1,4 @@
+#!/usr/bin/perl
+# MediocreGopher #
+
+print $_."\n" foreach 0..0;

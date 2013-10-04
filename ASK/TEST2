@@ -1,0 +1,19 @@
+#!/usr/bin/perl
+# DUSTFINGER #
+
+for ($a = 0;$a<=10;$a++) {
+	print "$a\n";
+	if ($a == 7) {
+		for ($b = 0;$b<=10;$b++) {
+			print "$b\n";
+			if ($b==9) {
+				print "done\n";
+				goto end;
+			}
+		}
+	}
+}
+
+
+print "Not end\n";
+end: print "This is the end\n";

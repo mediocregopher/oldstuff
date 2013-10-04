@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+#Usage: wutdo "thing you just did"
+#
+#Records everything you do by appending a timestamp and the thing to a central file.
+#Can be easily searched using the donewut command
+
+FILE=~/Dropbox/Home/Info/wutdo
+
+if [ "$1" != "" ]; then
+   echo "($(date +%c)) $1" | tee -a $FILE
+fi

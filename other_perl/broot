@@ -1,0 +1,23 @@
+#!/usr/bin/perl
+# MediocreGopher #
+
+my @list;
+push(@list,a..z);
+push(@list,0..9);
+push(@list,split(//,'!@#$%^&*'));
+
+for (my $incr=0;1;$incr++) {
+	rec($incr,'');
+}
+
+
+sub rec {
+	(my $i,my $return) = @_;
+
+	if ($i) {
+		rec($i-1,$return.$_) foreach @list;
+	}
+	else {
+		print $return.$_."\n" foreach @list;
+	}
+}
