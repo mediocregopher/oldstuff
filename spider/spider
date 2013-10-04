@@ -1,0 +1,317 @@
+#!/usr/bin/perl
+# DUSTFINGER #
+
+#<Modules>
+use lib "/home/God/src/perl/spider";
+use HTTP::Request::Common;
+use LWP::UserAgent;
+use db;
+use DateTime;
+use Data::Dumper;
+
+#<Retrieve connection, sub comes from db module>
+my $dbh = getConnection(); 
+
+#<Parameter passing, get's first link in the chain from command line>
+my @links = ($ARGV[0]);
+die "\nYou need to give a starting link\n\n" if !$links[0];
+
+#<More global variables>
+my @nextLinks;
+my $level = 0;
+my $good = 'good|positive|happy';
+my $bad = 'bad|negative|sad';
+my $max_visits = 25;
+
+#<Make blacklist of words not to index>
+my @blacklist = qw(a the and to i it is of for that was are s be with you in this my so have we not at me t as thing your but or all very some just new they on get she pretty am will like bout m really which had what from her too go any here up now has got there most if how do while when did were our his re been why should its no can then also than by who though an he him);
+push(@blacklist,"");
+push(@blacklist," ");
+
+#<Add 'good' and 'bad' words to blacklist>
+push(@blacklist,$_) foreach ($good =~ /(.+?)\|/gi);
+push(@blacklist,$1) if $good =~ /\|([a-z]+)$/i;
+push(@blacklist,$_) foreach ($bad =~ /(.+?)\|/gi);
+push(@blacklist,$1) if $bad =~ /\|([a-z]+)$/i;
+
+#<Browser setup>
+my $browser = LWP::UserAgent->new();
+$browser->agent("Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)");
+$browser->timeout(5);
+
+#<Query preparation>
+
+	#<Inserts url into database, prevents repeated requests to the same url>
+	my $query = 'insert into visited (url,time,title) values (?,Now(),?);';
+	my $sth_visited_insert = $dbh->prepare($query);
+
+	#<Inserts domain into bases database, increases times_visited by one if it's already there>
+	$query = "insert into bases (base_url) values (?) on duplicate key update times_visited = times_visited + 1";
+	my $sth_bases_insert_update = $dbh->prepare($query);
+
+	#<Query to test if url has been visited before>
+	$query = 'select 1 from visited where url = ?';
+	my $sth_url_visited_test = $dbh->prepare($query);
+
+	#<Query number of times domain has been visited>
+	$query = 'select times_visited from bases where base_url=?';
+	my $sth_url_visit_count = $dbh->prepare($query);
+
+#</Query preparation>
+
+
+
+#<Begin main loop>
+while(1) {
+
+	#<Print level in the chain, this provides a macro-benchmark>
+	print "################### $level ###################\n";
+
+	#<Initialize domain_count hash variable. Each key is a domain, and it returns
+	# an array. The array will contain all the urls found on that domain
+	my %domain_count=();
+
+	#<Begin going through each individual url>
+	foreach $url (@links) {
+
+		#<Bug catcher>
+		next if $url !~ /^(https?|ftps?):\/\//i;
+
+		#<Get domain name of url>
+		my $domain = $1 if $url =~ /^(.+?:\/\/[^\/]+\.[^\/]+)/i;
+
+		#<Query number of times domain has been visited>
+		my $test;
+		$sth_url_visit_count->execute($domain);
+		$sth_url_visit_count->bind_columns(\$test);
+		$sth_url_visit_count->fetch();
+
+		#<Final say over how many times a domain gets visited>
+		next if $test > $max_visits;
+
+		#<Initialization of array of links found in this $url>
+		my @foundLinks;
+
+		#<Prints the current url to stdout>
+		print $url."\n";
+
+		#<Creates http request and sets referer>
+		my $request = GET($url);
+		$request->referer("http://google.com");
+
+		#<The meat, sends request and processes response>
+		my $r = $browser->request($request);
+		my $response = $r->as_string;
+
+		#<Inserts domain into bases database, increases times_visited by one if it's already there>
+		$sth_bases_insert_update->execute($domain);			
+
+		#<Strips newlines and tabs from response>
+		$response =~ s/\n|\t//gi;
+
+		#<Finds title of the page, sets it to _ if blank>
+		my $title = $1 if $response =~ /<title>(.+)<\/title>/i;
+		$title = "_" if !$title;
+
+		#<Searches through response for hrefs and javascript links, adds them to foundLinks>
+		my @foundLinks;
+		@foundLinks = (@foundLinks,$response =~ /href=[\"|\'](.*?)[\"|\'][\s|>|\/]/gi);
+		@foundLinks = (@foundLinks,$response =~ /document\.location=[\"|\'](.*?)[\"|\']/gi);
+
+		#<Searches through response and gets all sentences, begins loop>
+		#my @sentences = $response =~ /([a-z0-9\'\"\@\#\$\%\^\&\*\(\)\s]+[\.\?!])/gi;
+		my @sentences = extract_sentences($response);
+		process_sentence($_) foreach @sentences;
+
+		#<Inserts url into database, prevents repeated requests to the same url>
+		$sth_visited_insert->execute($url,$title);
+
+		#<Needed to trick my regex, in the case of viewing a directory index>
+		$url =~ s/(.*\/)$/$1index.html/i;
+
+		
+		#<Begins parsing loop for foundLinks>
+		for(my $i = 0;$i < @foundLinks;$i++) {
+			
+			#<Returns true if:
+				# link is a javascript function, and not an actual link
+				# link is blank
+				# link is a space
+				# link is a #
+			#>
+			if ($foundLinks[$i] =~ /^javascript:/i or !$foundLinks[$i] or $foundLinks[$i] eq ' ' or $foundLinks[$i] eq '#') {
+				#<Removes link from array, and skips the rest of the code block
+				splice(@foundLinks,$i,1);
+				next;
+			}
+
+			#<Returns true if link is a relative link>
+			elsif ($foundLinks[$i] !~ /^(https?|ftps?):\/\//i) {
+
+				#<Finds domain name, then finds path within that domain,
+				# then makes sure the whole thing doesn't end in a slash>
+				my $base = $1 if $url =~ /^(.+?:\/\/[^\/]+\.[^\/]+)/i;
+				$base = $base.$1 if $url =~ /\.[^\/]+(\/.*\/).+$/i;
+				$base =~ s/(.*)\/$/$1/i;
+
+				#<Strips / from beginning of the relative link>
+				my $suffix = $1 if $foundLinks[$i] =~ /^\/?(.+)$/i;
+
+				#<Concat base and link with / in between>
+				$foundLinks[$i] = $base."/".$suffix;	
+			}
+			
+			#<Get domain name of url>
+			my $domain = $1 if $foundLinks[$i] =~ /^(.+?:\/\/[^\/]+\.[^\/]+)/i;
+
+			#<Query to test if url has been visited before>
+			my $test;
+			$sth_url_visited_test->execute($foundLinks[$i]);
+			$sth_url_visited_test->bind_columns(\$test);
+			$sth_url_visited_test->fetch();
+	
+			#<Remove url if it has been visited before>
+			splice(@foundLinks,$i,1) and next if $test;
+
+			#<Query number of times domain has been visited>
+			my $test;
+			$sth_url_visit_count->execute($domain);
+			$sth_url_visit_count->bind_columns(\$test);
+			$sth_url_visit_count->fetch();
+
+			#<Remove url if it's domain has been visited too many times>
+			splice(@foundLinks,$i,1) and next if $test > $max_visits ;
+					
+			#<Adds that domain and url to %domain_count>
+			push(@{$domain_count{$domain}},$foundLinks[$i]);
+
+		}
+	}
+
+	#<Now we go through %domain_count, splice each domain's list of indexes,
+	# and add the remaining links to @nextLinks>
+	foreach (keys %domain_count) {
+
+		#<Splices each array of indexes to appropriate size>
+		random_splice(\@{$domain_count{$_}},$max_visits);
+
+		#Appends spliced list to @nextLinks
+		@nextLinks = (@nextLinks, @{$domain_count{$_}});
+	}
+
+	#<Array->Hash->Array, removes repeated urls, and psuedo-randomizes them>
+	my %temp;
+	$temp{$_} = 1 foreach(@nextLinks);
+	@nextLinks = keys(%temp);
+
+	#<Keep number of links in list down to 100>
+	#splice(@nextLinks,100);
+	splice(@nextLinks,100);
+
+	#<Reset links with new links, increment level variable>
+	@links = @nextLinks;
+	@nextLinks = ();
+	$level++;
+	
+	#<Exit program if there are no more links>
+	exit if !@links;
+}
+
+#Recursive function which removes random elements of an array until it
+#is the proper length
+#
+#First param: reference to array
+#Second: target length
+sub random_splice {
+	my @arr = @{$_[0]};
+	my $length = $_[1];
+	my $orig_ref = ($_[2]) ? $_[2] : $_[0];
+
+	if (@arr <= $length) {
+		@$orig_ref = @arr;
+		return @arr;
+	}
+	else {
+		splice(@arr,int(rand(@arr)),1);
+		random_splice(\@arr,$length,$orig_ref);
+	}
+}
+
+sub extract_sentences {
+	(my $response) = @_;
+
+	$response =~ s/\n|\t//g; #Remove tabs/newlines
+	$response = $1 if $response =~ /<body.*?>(.*)<\/body>/i; #extract only things in the body
+	$response =~ s/<\!--.*?-->//gi; #Remove html comments
+	$response =~ s/<script.*?>.*?<\/script.*?>//gi; #Remove javascript in the body
+
+	$response =~ s/([^\.\!\?])<\//$1\.<\//gi; #Ensures everything ends with a period
+	$response =~ s/<.*?>/ /gi; #Removes all tags completely, replaces them with spaces
+
+	my @sentences = $response =~ /(\S.+?[.!?])(?=\s+|$)/gi; #REGEX OF DOOM
+
+	#Gets rid of all sentences that don't have any letters or don't have any spaces
+	my $i=0;
+	while ($i < @sentences) {
+		my $sentence = $sentences[$i];
+		if (
+			$sentence !~ /[a-z]/i ||
+			$sentence !~ / /
+			) {
+			splice(@sentences,$i,1);
+		}
+		else {$i++;}
+	}
+
+	return @sentences;
+}
+
+sub process_sentence {
+	($_) = @_;
+	#<Returns true if a 'good' word is found>
+	if (/(\s|\.)($good)(\s|\.)/i) {
+		process_sentences_meta($_,'good');
+	}
+
+	#<Exactly the same as the 'good' words, but 'bad'>
+	if (/(\s|\.)($bad)(\s|\.)/i) {
+		process_sentences_meta($_,'bad');
+	}
+
+	sub process_sentences_meta {
+		($_,my $goodorbad) = @_;
+
+		#<Individual words in the sentence picked out>
+		my @words = /([\w\']+)/ig;
+
+		#<Rejected if three words or less>
+		return if @words < 4;
+
+		#<Makes sure none of the words on the blacklist are
+		# in the sentence>
+		foreach $bad_word (@blacklist) {
+			my $i = 0;
+			while ($i < @words) {
+				if ($words[$i] =~ /^$bad_word$/i) {
+					splice(@words,$i,1);
+				}
+				else {
+					$i++;
+				}
+			}
+		}
+
+		#Quotes each word for mysql, and makes it lower case
+		$_ = $dbh->quote(lc($_)) foreach @words;
+
+		#<Creates the list of words for the query>
+		my $word_list = join(",1),(",@words);
+		$word_list = "(".$word_list.",1)";
+
+		#<Executes the query>
+		$query = "insert into words (word,$goodorbad) values $word_list on duplicate key update $goodorbad = $goodorbad + 1";
+		$sth = $dbh->prepare($query);
+		$sth->execute();
+	}
+}
+

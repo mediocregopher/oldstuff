@@ -1,0 +1,10 @@
+#!/usr/bin/perl
+# DUSTFINGER #
+
+use lib "/home/God/src/perl/spider";
+use db;
+
+my $dbh = getConnection();
+my $query = "delete from words";
+my $sth = $dbh->prepare($query);
+$sth->execute();

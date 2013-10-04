@@ -1,0 +1,19 @@
+#!/usr/bin/perl
+# DUSTFINGER #
+#use lib "/home/God/src/perl/spider";
+use db;
+
+`ps -A | grep spider | grep -v reset_spider | cut -c1-6 | xargs kill`;
+
+#<Retrieve connection, sub comes from db module>
+my $dbh = getConnection();
+
+my $query = 'delete from bases';
+my $sth = $dbh->prepare($query);
+$sth->execute;
+
+my $query = 'delete from visited';
+my $sth = $dbh->prepare($query);
+$sth->execute;
+
+exec('/home/mediocregopher/src/spider/spider http://news.google.com');

@@ -1,0 +1,34 @@
+#!/usr/bin/perl
+# MediocreGopher #
+
+use Data::Dumper;
+
+my $response = `curl http://www.canadianbusiness.com/markets/market_news/article.jsp?content=D9LG0V501 2>&1`;
+
+$response =~ s/\n|\t//g;
+$response = $1 if $response =~ /<body.*?>(.*)<\/body>/i;
+$response =~ s/<\!--.*?-->//gi;
+$response =~ s/<script.*?>.*?<\/script.*?>//gi;
+
+$response =~ s/([^\.\!\?])<\//$1\.<\//gi;
+$response =~ s/<.*?>/ /gi;
+
+#print $response."\n";
+
+my @sentences = $response =~ /(\S.+?[.!?])(?=\s+|$)/gi; #REGEX OF DOOM
+
+my $i=0;
+while ($i < @sentences) {
+	my $sentence = $sentences[$i];
+	if (
+		$sentence !~ /[a-z]/i ||
+		$sentence !~ / /
+		) {
+		splice(@sentences,$i,1);
+	}
+	else {$i++;}
+}
+
+print Dumper(@sentences);
+
+

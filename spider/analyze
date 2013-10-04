@@ -1,0 +1,91 @@
+#!/usr/bin/perl
+# DUSTFINGER #
+use lib "/home/God/src/perl/spider";
+use db;
+
+my $dbh = getConnection();
+my @titles;
+my %words;
+
+my $title_temp;
+my $query = "select title from visited;";
+my $sth = $dbh->prepare($query);
+$sth->execute();
+$sth->bind_columns(\$title_temp);
+push(@titles,$title_temp) while $sth->fetch();
+
+my $word_temp,$good_temp,$bad_temp;
+$query = "select word,good,bad from words";
+$sth = $dbh->prepare($query);
+$sth->execute();
+$sth->bind_columns(\$word_temp,\$good_temp,\$bad_temp);
+$words{$word_temp} = [$good_temp,$bad_temp] while $sth->fetch();
+
+my $index;
+my $good;
+my $bad;
+foreach (@titles) {
+	foreach $word (/([\w]+)/ig) {
+		if ($words{$word}) {
+			$good = $good + $words{$word}->[0];
+			$bad = $bad + $words{$word}->[1];
+			
+		}
+	}
+}
+
+print "good:$good\nbad:$bad\n";
+
+if ($good > $bad) {
+	$index = 2.5 + meat((($good-$bad)/$bad)*100);
+}
+
+else {
+	$index = 5.5 - meat((($bad-$good)/$good)*100)
+}
+
+open(INDEX,">/var/www/html/world/index");
+print INDEX $index;
+close INDEX;
+
+my $state;
+if (1 <= $index && $index < 2) {
+	$state = 'QQ';
+}
+elsif (2 <= $index && $index < 3) {
+	$state = 'AAARG';
+}
+elsif (3 <= $index && $index < 4) {
+	$state = 'Bleh';
+}
+elsif (4 <= $index && $index < 5) {
+	$state = 'Eh';
+}
+elsif (5 <= $index && $index < 6) {
+	$state = 'Meh';
+}
+elsif (6 <= $index && $index < 7) {
+	$state = 'Doin\' Alright';
+}
+elsif (7 <= $index && $index < 8) {
+	$state = 'Feelin\' pretty good';
+}
+elsif (8 <= $index && $index < 9) {
+	$state = 'Life is awesome!';
+}
+elsif (9 <= $index && $index < 10) {
+	$state = 'Damn skippy!';
+}
+
+open(STATE,">/var/www/html/world/state");
+print STATE $state;
+close(STATE);
+
+print $index.":".$state."\n";
+
+
+
+sub meat() {
+	return ((5*$_[0])/($_[0]+100))
+}
+
